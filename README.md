@@ -2,6 +2,16 @@
 
 A space-efficient encoding scheme for rational numbers optimized for values that are "mostly integers with occasional simple fractions."
 
+## Recent Updates (2025-11-14)
+
+This implementation has been refactored to properly implement the specification with the following improvements:
+
+- **Removed `num_tuples` field**: The struct now relies solely on bit 15 of the `whole` field as the tuple presence flag, and scans tuples using the end flag (bit 7 of denominator byte)
+- **Proper error handling**: All creation and arithmetic functions now return `CRResult` with explicit error codes instead of silent failures
+- **Range validation**: Values outside [-16384, 16383] are properly rejected with `CR_OUT_OF_RANGE` error
+- **Overflow detection**: Addition operations check for overflow before returning results
+- **True 15-bit integers**: Negative integers are now correctly stored as 15-bit signed values with bit 15 available for the tuple flag
+
 ## Overview
 
 This C implementation provides a compact representation that uses significantly less space than the standard 8-byte (32-bit numerator + 32-bit denominator) approach for common use cases like scoring and grading systems.
@@ -43,20 +53,32 @@ The encoding consists of:
 ```c
 #include "compact_rational.h"
 
-// Create from integer
-CompactRational score1 = cr_from_int(42);
+// Create from integer (returns CRResult with error checking)
+CRResult res1 = cr_from_int(42);
+if (res1.error != CR_OK) {
+    fprintf(stderr, "Error: %s\n", cr_error_string(res1.error));
+    return 1;
+}
 
 // Create from fraction (7 and 1/3)
-CompactRational score2 = cr_from_fraction(22, 3);
+CRResult res2 = cr_from_fraction(22, 3);
+if (res2.error != CR_OK) {
+    fprintf(stderr, "Error: %s\n", cr_error_string(res2.error));
+    return 1;
+}
 
 // Add scores
-CompactRational total = cr_add(&score1, &score2);
+CRResult total_res = cr_add(&res1.value, &res2.value);
+if (total_res.error != CR_OK) {
+    fprintf(stderr, "Error: %s\n", cr_error_string(total_res.error));
+    return 1;
+}
 
 // Print result
-cr_print(&total);  // Output: 49 1/3 (49.333333)
+cr_print(&total_res.value);  // Output: 49 1/3 (49.333333)
 
 // Convert to double
-double value = cr_to_double(&total);  // 49.333333
+double value = cr_to_double(&total_res.value);  // 49.333333
 ```
 
 ### Compiling
@@ -75,10 +97,16 @@ gcc -o compact_rational compact_rational.c -lm -Wall
 
 ## API Reference
 
+### Error Handling
+
+- `CRError` - Error codes: `CR_OK`, `CR_OUT_OF_RANGE`, `CR_DIVISION_BY_ZERO`, `CR_OVERFLOW`, `CR_TOO_MANY_TUPLES`
+- `CRResult` - Result type containing `CompactRational value` and `CRError error`
+- `const char* cr_error_string(CRError error)` - Get error message string
+
 ### Creation Functions
 
-- `CompactRational cr_from_int(int32_t value)` - Create from integer
-- `CompactRational cr_from_fraction(int32_t num, int32_t denom)` - Create from numerator/denominator
+- `CRResult cr_from_int(int32_t value)` - Create from integer (validates range [-16384, 16383])
+- `CRResult cr_from_fraction(int32_t num, int32_t denom)` - Create from numerator/denominator
 - `void cr_init(CompactRational* cr)` - Initialize to zero
 
 ### Conversion Functions
@@ -88,7 +116,7 @@ gcc -o compact_rational compact_rational.c -lm -Wall
 
 ### Arithmetic Functions
 
-- `CompactRational cr_add(const CompactRational* a, const CompactRational* b)` - Add two rationals
+- `CRResult cr_add(const CompactRational* a, const CompactRational* b)` - Add two rationals (checks for overflow)
 
 ### Utility Functions
 
