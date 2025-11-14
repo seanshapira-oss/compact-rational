@@ -8,11 +8,17 @@
 #define MAX_TUPLES 5
 #define MIN_DENOMINATOR 128
 #define MAX_DENOMINATOR 255
+#define MAX_NUMERATOR 255
+#define MAX_WHOLE_VALUE 16383
+#define MIN_WHOLE_VALUE -16383
 
 // Compact Rational structure
+// NOTE: The 'whole' field uses standard int16_t two's complement representation.
+// For positive integers, bit 15 = 0 naturally. For negative integers, bit 15 = 1 (sign bit).
+// The tuple presence flag functionality is implemented via num_tuples, not bit 15.
 typedef struct {
-    int16_t whole;           // Bit 15: tuple flag, bits 14-0: signed integer
-    uint8_t num_tuples;      // Number of tuples present (0 to MAX_TUPLES)
+    int16_t whole;           // Signed 16-bit integer (includes sign bit at position 15)
+    uint8_t num_tuples;      // Number of tuples present (0 to MAX_TUPLES) - authoritative tuple flag
     uint16_t tuples[MAX_TUPLES];  // Each: high byte = numerator, low byte = denom info
 } CompactRational;
 
@@ -85,12 +91,20 @@ void cr_init(CompactRational* cr) {
 CompactRational cr_from_int(int32_t value) {
     CompactRational cr;
     cr_init(&cr);
-    
-    // Clamp to 15-bit signed range
-    if (value > 16383) value = 16383;
-    if (value < -16383) value = -16383;
-    
-    cr.whole = (int16_t)value;  // Bit 15 is 0 (no tuples)
+
+    // Clamp to 15-bit signed range with warning
+    if (value > MAX_WHOLE_VALUE) {
+        fprintf(stderr, "Warning: value %d exceeds MAX_WHOLE_VALUE (%d), clamping to %d\n",
+                value, MAX_WHOLE_VALUE, MAX_WHOLE_VALUE);
+        value = MAX_WHOLE_VALUE;
+    }
+    if (value < MIN_WHOLE_VALUE) {
+        fprintf(stderr, "Warning: value %d below MIN_WHOLE_VALUE (%d), clamping to %d\n",
+                value, MIN_WHOLE_VALUE, MIN_WHOLE_VALUE);
+        value = MIN_WHOLE_VALUE;
+    }
+
+    cr.whole = (int16_t)value;  // No tuples, num_tuples = 0
     return cr;
 }
 
@@ -118,27 +132,40 @@ CompactRational cr_from_fraction(int32_t num, int32_t denom) {
         whole -= 1;
     }
     
-    // Clamp whole part
-    if (whole > 16383) whole = 16383;
-    if (whole < -16383) whole = -16383;
-    
+    // Clamp whole part with warning
+    if (whole > MAX_WHOLE_VALUE) {
+        fprintf(stderr, "Warning: whole part %d exceeds MAX_WHOLE_VALUE (%d), clamping to %d\n",
+                whole, MAX_WHOLE_VALUE, MAX_WHOLE_VALUE);
+        whole = MAX_WHOLE_VALUE;
+    }
+    if (whole < MIN_WHOLE_VALUE) {
+        fprintf(stderr, "Warning: whole part %d below MIN_WHOLE_VALUE (%d), clamping to %d\n",
+                whole, MIN_WHOLE_VALUE, MIN_WHOLE_VALUE);
+        whole = MIN_WHOLE_VALUE;
+    }
+
     cr.whole = (int16_t)whole;
-    
+
     // If there's a fractional part, encode it
     if (remainder_num != 0) {
         // Find appropriate antichain denominator
         uint8_t antichain_denom = find_antichain_denominator(r.denominator);
-        
+
         // Scale numerator to match antichain denominator
         uint64_t scaled_num = (remainder_num * antichain_denom) / r.denominator;
-        
-        if (scaled_num > 0 && scaled_num <= 255) {
-            cr.whole |= 0x8000;  // Set tuple presence flag
+
+        if (scaled_num > 0 && scaled_num <= MAX_NUMERATOR) {
+            // Validate num_tuples bounds
+            if (1 > MAX_TUPLES) {
+                fprintf(stderr, "Error: num_tuples (1) exceeds MAX_TUPLES (%d)\n", MAX_TUPLES);
+                return cr;  // Return integer part only
+            }
+
             cr.num_tuples = 1;
-            
+
             uint8_t offset = antichain_denom - MIN_DENOMINATOR;
             uint8_t denom_byte = 0x80 | offset;  // Set end flag
-            
+
             cr.tuples[0] = ((uint16_t)scaled_num << 8) | denom_byte;
         }
     }
@@ -149,42 +176,52 @@ CompactRational cr_from_fraction(int32_t num, int32_t denom) {
 // Decode compact rational to standard rational
 Rational cr_to_rational(const CompactRational* cr) {
     Rational result;
-    
-    // Extract whole part (bits 14-0, sign-extended)
-    int16_t whole_value = cr->whole & 0x7FFF;
-    if (cr->whole & 0x4000) {  // Sign bit of 15-bit value
-        whole_value |= 0x8000;  // Sign extend
-    }
-    
-    result.numerator = whole_value;
+
+    // Use the whole field directly as a signed 16-bit integer
+    // This properly handles both positive and negative integers
+    result.numerator = cr->whole;
     result.denominator = 1;
-    
-    // If no tuples, return the integer
-    if (!(cr->whole & 0x8000)) {
+
+    // Use num_tuples as the authoritative tuple presence indicator
+    if (cr->num_tuples == 0) {
         return result;
     }
-    
+
+    // Validate num_tuples
+    if (cr->num_tuples > MAX_TUPLES) {
+        fprintf(stderr, "Error: num_tuples (%d) exceeds MAX_TUPLES (%d), processing only first %d\n",
+                cr->num_tuples, MAX_TUPLES, MAX_TUPLES);
+    }
+
     // Process tuples and accumulate fractions
-    for (int i = 0; i < cr->num_tuples && i < MAX_TUPLES; i++) {
+    int tuples_to_process = (cr->num_tuples < MAX_TUPLES) ? cr->num_tuples : MAX_TUPLES;
+    for (int i = 0; i < tuples_to_process; i++) {
         uint8_t numerator = (cr->tuples[i] >> 8) & 0xFF;
         uint8_t denom_byte = cr->tuples[i] & 0xFF;
         uint8_t offset = denom_byte & 0x7F;
         uint8_t denominator = MIN_DENOMINATOR + offset;
-        
+
         // Add this fraction: result += numerator/denominator
         // result = (result.num * denom + numerator * result.denom) / (result.denom * denom)
         result.numerator = result.numerator * denominator + numerator * result.denominator;
         result.denominator *= denominator;
-        
+
         reduce_rational(&result);
     }
-    
+
     return result;
 }
 
 // Convert to double (for display/comparison)
 double cr_to_double(const CompactRational* cr) {
     Rational r = cr_to_rational(cr);
+
+    // Defensive check for zero denominator
+    if (r.denominator == 0) {
+        fprintf(stderr, "Error: division by zero in cr_to_double\n");
+        return 0.0;
+    }
+
     return (double)r.numerator / (double)r.denominator;
 }
 
@@ -216,32 +253,42 @@ CompactRational cr_add(const CompactRational* a, const CompactRational* b) {
     // Convert both to standard rationals, add them, then encode back
     Rational ra = cr_to_rational(a);
     Rational rb = cr_to_rational(b);
-    
+
     // Add: ra + rb = (ra.num * rb.denom + rb.num * ra.denom) / (ra.denom * rb.denom)
     Rational sum;
     sum.numerator = ra.numerator * rb.denominator + rb.numerator * ra.denominator;
     sum.denominator = ra.denominator * rb.denominator;
-    
+
     reduce_rational(&sum);
-    
+
+    // Check for overflow before downcasting to int32_t
+    if (sum.numerator > INT32_MAX || sum.numerator < INT32_MIN ||
+        sum.denominator > INT32_MAX || sum.denominator < INT32_MIN) {
+        fprintf(stderr, "Error: overflow in addition - result (%lld/%lld) exceeds int32_t range\n",
+                (long long)sum.numerator, (long long)sum.denominator);
+        return cr_from_int(0);  // Return zero on overflow
+    }
+
     // Convert back to compact form
     return cr_from_fraction((int32_t)sum.numerator, (int32_t)sum.denominator);
 }
 
 // Print raw encoding (for debugging)
 void cr_print_encoding(const CompactRational* cr) {
-    printf("Encoding: whole=0x%04X (%d tuples)", cr->whole, cr->num_tuples);
-    
-    if (cr->whole & 0x8000) {
+    // Cast to uint16_t to avoid sign extension artifacts in hex display
+    printf("Encoding: whole=0x%04X (%d tuples)", (uint16_t)cr->whole, cr->num_tuples);
+
+    if (cr->num_tuples > 0) {
         printf(" [");
-        for (int i = 0; i < cr->num_tuples && i < MAX_TUPLES; i++) {
+        int tuples_to_print = (cr->num_tuples < MAX_TUPLES) ? cr->num_tuples : MAX_TUPLES;
+        for (int i = 0; i < tuples_to_print; i++) {
             uint8_t num = (cr->tuples[i] >> 8) & 0xFF;
             uint8_t denom_byte = cr->tuples[i] & 0xFF;
             uint8_t offset = denom_byte & 0x7F;
             bool end_flag = (denom_byte & 0x80) != 0;
-            
+
             printf("%d/%d%s", num, MIN_DENOMINATOR + offset, end_flag ? "(end)" : "");
-            if (i < cr->num_tuples - 1) printf(", ");
+            if (i < tuples_to_print - 1) printf(", ");
         }
         printf("]");
     }
@@ -365,12 +412,92 @@ void run_tests() {
     printf("  Max whole (16383): ");
     cr_print(&max_val);
     printf("\n");
-    
+
     CompactRational min_val = cr_from_int(-16383);
     printf("  Min whole (-16383): ");
     cr_print(&min_val);
     printf("\n");
-    
+
+    // Test 8: Negative integers (NEW - addresses code review)
+    printf("\nTest 8: Negative integers without fractions\n");
+    CompactRational neg_int1 = cr_from_int(-1);
+    printf("  -1 -> ");
+    cr_print(&neg_int1);
+    printf(" [%zu bytes]\n", cr_size(&neg_int1));
+    cr_print_encoding(&neg_int1);
+
+    CompactRational neg_int2 = cr_from_int(-100);
+    printf("  -100 -> ");
+    cr_print(&neg_int2);
+    printf(" [%zu bytes]\n", cr_size(&neg_int2));
+    cr_print_encoding(&neg_int2);
+
+    CompactRational neg_int3 = cr_from_int(-16383);
+    printf("  -16383 -> ");
+    cr_print(&neg_int3);
+    printf(" [%zu bytes]\n", cr_size(&neg_int3));
+    cr_print_encoding(&neg_int3);
+
+    // Test 9: Boundary value tests (NEW - addresses code review)
+    printf("\nTest 9: Boundary values (clamping tests)\n");
+    printf("  Testing value above max (16384):\n  ");
+    CompactRational above_max = cr_from_int(16384);
+    cr_print(&above_max);
+    printf("\n");
+
+    printf("  Testing value below min (-16384):\n  ");
+    CompactRational below_min = cr_from_int(-16384);
+    cr_print(&below_min);
+    printf("\n");
+
+    printf("  Testing very large value (1000000):\n  ");
+    CompactRational very_large = cr_from_int(1000000);
+    cr_print(&very_large);
+    printf("\n");
+
+    // Test 10: Error case - division by zero (NEW - addresses code review)
+    printf("\nTest 10: Error cases\n");
+    printf("  Testing division by zero:\n  ");
+    CompactRational zero_denom = cr_from_fraction(1, 0);
+    cr_print(&zero_denom);
+    printf("\n");
+
+    // Test 11: Negative fractions (NEW - addresses code review)
+    printf("\nTest 11: Negative fractions\n");
+    CompactRational neg_frac1 = cr_from_fraction(-5, 2);
+    printf("  -5/2 -> ");
+    cr_print(&neg_frac1);
+    printf(" [%zu bytes]\n", cr_size(&neg_frac1));
+    cr_print_encoding(&neg_frac1);
+
+    CompactRational neg_frac2 = cr_from_fraction(5, -3);
+    printf("  5/-3 -> ");
+    cr_print(&neg_frac2);
+    printf(" [%zu bytes]\n", cr_size(&neg_frac2));
+    cr_print_encoding(&neg_frac2);
+
+    CompactRational neg_frac3 = cr_from_fraction(-22, -3);
+    printf("  -22/-3 -> ");
+    cr_print(&neg_frac3);
+    printf(" [%zu bytes]\n", cr_size(&neg_frac3));
+    cr_print_encoding(&neg_frac3);
+
+    // Test 12: Addition with negative numbers (NEW - addresses code review)
+    printf("\nTest 12: Addition with negative numbers\n");
+    CompactRational pos_num = cr_from_int(10);
+    CompactRational neg_num = cr_from_int(-7);
+    CompactRational sum_mixed = cr_add(&pos_num, &neg_num);
+    printf("  10 + (-7) = ");
+    cr_print(&sum_mixed);
+    printf("\n");
+
+    CompactRational neg_a = cr_from_int(-5);
+    CompactRational neg_b = cr_from_int(-3);
+    CompactRational sum_neg = cr_add(&neg_a, &neg_b);
+    printf("  (-5) + (-3) = ");
+    cr_print(&sum_neg);
+    printf("\n");
+
     printf("\n=== All Tests Complete ===\n");
 }
 
