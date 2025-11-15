@@ -232,26 +232,143 @@ void cr_print(const CompactRational* cr) {
 
 // Add two compact rationals
 CompactRational cr_add(const CompactRational* a, const CompactRational* b) {
-    // Convert both to standard rationals, add them, then encode back
+    // Extract whole parts
+    int16_t whole_a = a->whole & 0x7FFF;
+    if (whole_a & 0x4000) whole_a |= 0x8000;  // Sign extend
+
+    int16_t whole_b = b->whole & 0x7FFF;
+    if (whole_b & 0x4000) whole_b |= 0x8000;  // Sign extend
+
+    bool has_tuples_a = (a->whole & 0x8000) != 0;
+    bool has_tuples_b = (b->whole & 0x8000) != 0;
+
+    // Count tuples in each input
+    int tuple_count_a = 0, tuple_count_b = 0;
+
+    if (has_tuples_a) {
+        for (int i = 0; i < MAX_TUPLES; i++) {
+            tuple_count_a++;
+            uint8_t denom_byte = a->tuples[i] & 0xFF;
+            if (denom_byte & 0x80) break;  // End flag in denominator byte
+        }
+    }
+
+    if (has_tuples_b) {
+        for (int i = 0; i < MAX_TUPLES; i++) {
+            tuple_count_b++;
+            uint8_t denom_byte = b->tuples[i] & 0xFF;
+            if (denom_byte & 0x80) break;  // End flag in denominator byte
+        }
+    }
+
+    // OPTIMIZATION 1: Both are single-tuple
+    if (tuple_count_a == 1 && tuple_count_b == 1) {
+        uint8_t na = (a->tuples[0] >> 8) & 0xFF;
+        uint8_t da_offset = a->tuples[0] & 0x7F;
+        uint8_t da = MIN_DENOMINATOR + da_offset;
+
+        uint8_t nb = (b->tuples[0] >> 8) & 0xFF;
+        uint8_t db_offset = b->tuples[0] & 0x7F;
+        uint8_t db = MIN_DENOMINATOR + db_offset;
+
+        CompactRational result;
+        cr_init(&result);
+
+        // Case 1a: Different denominators - combine into two tuples (EXACT!)
+        if (da != db) {
+            int32_t new_whole = whole_a + whole_b;
+
+            // Clamp
+            if (new_whole > MAX_WHOLE_VALUE) new_whole = MAX_WHOLE_VALUE;
+            if (new_whole < MIN_WHOLE_VALUE) new_whole = MIN_WHOLE_VALUE;
+
+            result.whole = (int16_t)((new_whole & 0x7FFF) | 0x8000);
+            result.tuples[0] = ((uint16_t)na << 8) | da_offset;  // No end flag
+            result.tuples[1] = ((uint16_t)nb << 8) | (0x80 | db_offset);  // End flag
+
+            return result;
+        }
+
+        // Case 1b: Same denominator - add numerators
+        else {
+            int32_t sum_numerator = na + nb;
+            int32_t new_whole = whole_a + whole_b;
+
+            // Extract overflow from numerator to whole
+            new_whole += sum_numerator / da;
+            sum_numerator %= da;
+
+            // Clamp
+            if (new_whole > MAX_WHOLE_VALUE) new_whole = MAX_WHOLE_VALUE;
+            if (new_whole < MIN_WHOLE_VALUE) new_whole = MIN_WHOLE_VALUE;
+
+            if (sum_numerator == 0) {
+                // Pure integer result
+                result.whole = (int16_t)(new_whole & 0x7FFF);
+            } else {
+                // Single tuple result
+                result.whole = (int16_t)((new_whole & 0x7FFF) | 0x8000);
+                result.tuples[0] = ((uint16_t)sum_numerator << 8) | (0x80 | da_offset);
+            }
+
+            return result;
+        }
+    }
+
+    // OPTIMIZATION 2: One integer, one single-tuple
+    if (tuple_count_a == 0 && tuple_count_b == 1) {
+        int32_t new_whole = whole_a + whole_b;
+        if (new_whole > MAX_WHOLE_VALUE) new_whole = MAX_WHOLE_VALUE;
+        if (new_whole < MIN_WHOLE_VALUE) new_whole = MIN_WHOLE_VALUE;
+
+        CompactRational result;
+        cr_init(&result);
+        result.whole = (int16_t)((new_whole & 0x7FFF) | 0x8000);
+        result.tuples[0] = b->tuples[0];  // Copy tuple from b
+        return result;
+    }
+
+    if (tuple_count_a == 1 && tuple_count_b == 0) {
+        int32_t new_whole = whole_a + whole_b;
+        if (new_whole > MAX_WHOLE_VALUE) new_whole = MAX_WHOLE_VALUE;
+        if (new_whole < MIN_WHOLE_VALUE) new_whole = MIN_WHOLE_VALUE;
+
+        CompactRational result;
+        cr_init(&result);
+        result.whole = (int16_t)((new_whole & 0x7FFF) | 0x8000);
+        result.tuples[0] = a->tuples[0];  // Copy tuple from a
+        return result;
+    }
+
+    // OPTIMIZATION 3: Both integers
+    if (tuple_count_a == 0 && tuple_count_b == 0) {
+        int32_t new_whole = whole_a + whole_b;
+        if (new_whole > MAX_WHOLE_VALUE) new_whole = MAX_WHOLE_VALUE;
+        if (new_whole < MIN_WHOLE_VALUE) new_whole = MIN_WHOLE_VALUE;
+
+        CompactRational result;
+        cr_init(&result);
+        result.whole = (int16_t)(new_whole & 0x7FFF);
+        return result;
+    }
+
+    // FALLBACK: Use rational conversion for complex cases (multi-tuple inputs)
     Rational ra = cr_to_rational(a);
     Rational rb = cr_to_rational(b);
 
-    // Add: ra + rb = (ra.num * rb.denom + rb.num * ra.denom) / (ra.denom * rb.denom)
     Rational sum;
     sum.numerator = ra.numerator * rb.denominator + rb.numerator * ra.denominator;
     sum.denominator = ra.denominator * rb.denominator;
 
     reduce_rational(&sum);
 
-    // Check for overflow before downcasting to int32_t
     if (sum.numerator > INT32_MAX || sum.numerator < INT32_MIN ||
         sum.denominator > INT32_MAX || sum.denominator < INT32_MIN) {
         fprintf(stderr, "Error: overflow in addition - result (%lld/%lld) exceeds int32_t range\n",
                 (long long)sum.numerator, (long long)sum.denominator);
-        return cr_from_int(0);  // Return zero on overflow
+        return cr_from_int(0);
     }
 
-    // Convert back to compact form
     return cr_from_fraction((int32_t)sum.numerator, (int32_t)sum.denominator);
 }
 

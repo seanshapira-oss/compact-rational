@@ -13,6 +13,7 @@ find_e_convergents
 test_best_e_convergent
 test_exact_add
 cr_add_improved
+test_new_add
 *.exe
 *.out
 *.app
