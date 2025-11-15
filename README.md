@@ -34,7 +34,9 @@ The encoding consists of:
 |---------|--------------|-------------------|---------|
 | Pure integer | 2 bytes | 8 bytes | 75% |
 | Simple fraction | 4 bytes | 8 bytes | 50% |
-| Complex rational | 2 + 2k bytes | 8 bytes | Varies |
+| Complex rational | 2 + 2n bytes | 8 bytes | Varies |
+
+*Note: n = number of tuples (not kilobytes). Each tuple adds 2 bytes.*
 
 ## Usage
 
@@ -58,6 +60,27 @@ cr_print(&total);  // Output: 49 1/3 (49.333333)
 // Convert to double
 double value = cr_to_double(&total);  // 49.333333
 ```
+
+### Advanced Example: Representing e (Euler's Number)
+
+The compact rational format can efficiently represent mathematical constants like e ≈ 2.71828:
+
+**Single-tuple representation** (4 bytes):
+```c
+// e ≈ 2 + 181/252 = 2.718254
+// Error: 0.001025% (27.86 µ)
+// Size: 4 bytes
+```
+
+**Two-tuple representation** (6 bytes):
+```c
+// e ≈ 2 + 55/166 + 89/230 = 2.718282
+// Error: 0.000000203% (5.52 × 10⁻⁹)
+// Size: 6 bytes
+// 5000× more accurate than single-tuple
+```
+
+The two-tuple representation achieves remarkable precision (error < 6 billionths) while using only 6 bytes total. See `test_e_representation.c` for implementation details.
 
 ### Compiling
 
