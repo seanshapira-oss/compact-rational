@@ -74,8 +74,6 @@ Approximation find_best_two_tuple() {
             double frac1 = (double)n1 / (double)d1;
             if (frac1 >= target) continue;  // First fraction shouldn't exceed target
 
-            double remaining = target - frac1;
-
             // Try second tuple (must be different denominator for canonical form)
             for (int d2 = MIN_DENOMINATOR; d2 <= MAX_DENOMINATOR; d2++) {
                 if (d2 == d1) continue;  // Skip duplicate denominators
