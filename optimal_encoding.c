@@ -304,10 +304,10 @@ void test_optimal_encoding() {
 
     printf("=== Key Observations ===\n");
     printf("1. Common fractions (1/2, 1/3, 1/4, ..., 1/8) have exact single-tuple encodings\n");
-    printf("2. Some fractions (like 1/9, 1/11) cannot be exactly represented\n");
-    printf("3. Two-tuple combinations can exactly represent many more fractions\n");
-    printf("4. The antichain property (no denominator divides another) prevents redundancy\n");
-    printf("5. Approximations are needed for denominators < 128 that don't divide any antichain denom\n");
+    printf("2. Fractions with denominators <= 127 can all be exactly represented (e.g., 1/9=15/135, 1/11=12/132)\n");
+    printf("3. Fractions with large denominators (> 255, e.g., 1/256, 1/257) cannot be exactly represented with single tuples\n");
+    printf("4. Two-tuple combinations can exactly represent many more fractions\n");
+    printf("5. The antichain property (no denominator divides another in [128,255]) prevents simple redundancy\n");
 }
 
 int main() {
