@@ -21,6 +21,30 @@
 // ============================================================================
 
 /**
+ * Error codes for compact rational operations
+ */
+typedef enum {
+    CR_SUCCESS = 0,                   // Operation completed successfully
+    CR_ERROR_NONE = 0,                // Alias for CR_SUCCESS
+    CR_ERROR_DIVISION_BY_ZERO,        // Attempted division by zero
+    CR_ERROR_VALUE_CLAMPED,           // Input value was clamped to valid range
+    CR_ERROR_OVERFLOW,                // Arithmetic overflow detected
+    CR_ERROR_INVALID_DENOMINATOR,     // Zero denominator in rational conversion
+    CR_ERROR_TUPLE_BOUNDS             // Tuple array bounds exceeded
+} CRErrorCode;
+
+/**
+ * Error information structure
+ * Provides detailed error context to calling code
+ */
+typedef struct {
+    CRErrorCode code;                 // Error code
+    char message[256];                // Human-readable error message
+    int32_t value1;                   // Context-specific value (e.g., original value that was clamped)
+    int32_t value2;                   // Additional context value (e.g., limit that was exceeded)
+} CRError;
+
+/**
  * Compact Rational structure
  *
  * Encoding:
@@ -72,15 +96,24 @@ void cr_init(CompactRational* cr);
 
 /**
  * Create compact rational from integer
- * Values outside [-16383, 16383] will be clamped with a warning
+ * Values outside [-16383, 16383] will be clamped
+ *
+ * @param value The integer value to convert
+ * @param error Optional error output (pass NULL to ignore errors)
+ * @return CompactRational representation of the value
  */
-CompactRational cr_from_int(int32_t value);
+CompactRational cr_from_int(int32_t value, CRError* error);
 
 /**
  * Create compact rational from numerator and denominator
  * The fraction will be reduced and encoded optimally
+ *
+ * @param num The numerator
+ * @param denom The denominator (must not be zero)
+ * @param error Optional error output (pass NULL to ignore errors)
+ * @return CompactRational representation of the fraction
  */
-CompactRational cr_from_fraction(int32_t num, int32_t denom);
+CompactRational cr_from_fraction(int32_t num, int32_t denom, CRError* error);
 
 // ============================================================================
 // CONVERSION FUNCTIONS
@@ -93,8 +126,12 @@ Rational cr_to_rational(const CompactRational* cr);
 
 /**
  * Convert to double (for display/comparison)
+ *
+ * @param cr The compact rational to convert
+ * @param error Optional error output (pass NULL to ignore errors)
+ * @return Double representation of the value
  */
-double cr_to_double(const CompactRational* cr);
+double cr_to_double(const CompactRational* cr, CRError* error);
 
 // ============================================================================
 // ARITHMETIC OPERATIONS
@@ -103,8 +140,13 @@ double cr_to_double(const CompactRational* cr);
 /**
  * Add two compact rationals
  * Result is automatically reduced and re-encoded
+ *
+ * @param a First compact rational
+ * @param b Second compact rational
+ * @param error Optional error output (pass NULL to ignore errors)
+ * @return Sum of a and b as a compact rational
  */
-CompactRational cr_add(const CompactRational* a, const CompactRational* b);
+CompactRational cr_add(const CompactRational* a, const CompactRational* b, CRError* error);
 
 // ============================================================================
 // DISPLAY AND DEBUG FUNCTIONS

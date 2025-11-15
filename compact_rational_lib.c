@@ -8,6 +8,16 @@
 // UTILITY FUNCTIONS
 // ============================================================================
 
+// Helper function to set error information
+static void set_error(CRError* error, CRErrorCode code, const char* message, int32_t value1, int32_t value2) {
+    if (error != NULL) {
+        error->code = code;
+        snprintf(error->message, sizeof(error->message), "%s", message);
+        error->value1 = value1;
+        error->value2 = value2;
+    }
+}
+
 // GCD using Euclidean algorithm
 int64_t gcd(int64_t a, int64_t b) {
     a = llabs(a);
@@ -63,20 +73,33 @@ void cr_init(CompactRational* cr) {
 }
 
 // Create compact rational from integer
-CompactRational cr_from_int(int32_t value) {
+CompactRational cr_from_int(int32_t value, CRError* error) {
     CompactRational cr;
     cr_init(&cr);
 
-    // Clamp to 15-bit signed range with warning
+    int32_t original_value = value;
+    bool clamped = false;
+
+    // Clamp to 15-bit signed range
     if (value > MAX_WHOLE_VALUE) {
-        fprintf(stderr, "Warning: value %d exceeds MAX_WHOLE_VALUE (%d), clamping to %d\n",
-                value, MAX_WHOLE_VALUE, MAX_WHOLE_VALUE);
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Value %d exceeds MAX_WHOLE_VALUE (%d), clamping to %d",
+                 value, MAX_WHOLE_VALUE, MAX_WHOLE_VALUE);
+        set_error(error, CR_ERROR_VALUE_CLAMPED, msg, original_value, MAX_WHOLE_VALUE);
         value = MAX_WHOLE_VALUE;
-    }
-    if (value < MIN_WHOLE_VALUE) {
-        fprintf(stderr, "Warning: value %d below MIN_WHOLE_VALUE (%d), clamping to %d\n",
-                value, MIN_WHOLE_VALUE, MIN_WHOLE_VALUE);
+        clamped = true;
+    } else if (value < MIN_WHOLE_VALUE) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Value %d below MIN_WHOLE_VALUE (%d), clamping to %d",
+                 value, MIN_WHOLE_VALUE, MIN_WHOLE_VALUE);
+        set_error(error, CR_ERROR_VALUE_CLAMPED, msg, original_value, MIN_WHOLE_VALUE);
         value = MIN_WHOLE_VALUE;
+        clamped = true;
+    }
+
+    // If no clamping occurred, set success
+    if (!clamped && error != NULL) {
+        set_error(error, CR_SUCCESS, "Success", 0, 0);
     }
 
     // Store as 15-bit signed value in bits 14-0, bit 15 = 0 (no tuples)
@@ -85,12 +108,14 @@ CompactRational cr_from_int(int32_t value) {
 }
 
 // Create compact rational from numerator and denominator
-CompactRational cr_from_fraction(int32_t num, int32_t denom) {
+CompactRational cr_from_fraction(int32_t num, int32_t denom, CRError* error) {
     CompactRational cr;
     cr_init(&cr);
 
     if (denom == 0) {
-        fprintf(stderr, "Error: division by zero\n");
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Division by zero (numerator=%d, denominator=%d)", num, denom);
+        set_error(error, CR_ERROR_DIVISION_BY_ZERO, msg, num, denom);
         return cr;
     }
 
@@ -108,16 +133,29 @@ CompactRational cr_from_fraction(int32_t num, int32_t denom) {
         whole -= 1;
     }
 
-    // Clamp whole part with warning
+    int32_t original_whole = whole;
+    bool clamped = false;
+
+    // Clamp whole part
     if (whole > MAX_WHOLE_VALUE) {
-        fprintf(stderr, "Warning: whole part %d exceeds MAX_WHOLE_VALUE (%d), clamping to %d\n",
-                whole, MAX_WHOLE_VALUE, MAX_WHOLE_VALUE);
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Whole part %d exceeds MAX_WHOLE_VALUE (%d), clamping to %d",
+                 whole, MAX_WHOLE_VALUE, MAX_WHOLE_VALUE);
+        set_error(error, CR_ERROR_VALUE_CLAMPED, msg, original_whole, MAX_WHOLE_VALUE);
         whole = MAX_WHOLE_VALUE;
-    }
-    if (whole < MIN_WHOLE_VALUE) {
-        fprintf(stderr, "Warning: whole part %d below MIN_WHOLE_VALUE (%d), clamping to %d\n",
-                whole, MIN_WHOLE_VALUE, MIN_WHOLE_VALUE);
+        clamped = true;
+    } else if (whole < MIN_WHOLE_VALUE) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Whole part %d below MIN_WHOLE_VALUE (%d), clamping to %d",
+                 whole, MIN_WHOLE_VALUE, MIN_WHOLE_VALUE);
+        set_error(error, CR_ERROR_VALUE_CLAMPED, msg, original_whole, MIN_WHOLE_VALUE);
         whole = MIN_WHOLE_VALUE;
+        clamped = true;
+    }
+
+    // If no error occurred, set success
+    if (!clamped && error != NULL) {
+        set_error(error, CR_SUCCESS, "Success", 0, 0);
     }
 
     // If there's a fractional part, encode it
@@ -195,13 +233,20 @@ Rational cr_to_rational(const CompactRational* cr) {
 }
 
 // Convert to double (for display/comparison)
-double cr_to_double(const CompactRational* cr) {
+double cr_to_double(const CompactRational* cr, CRError* error) {
     Rational r = cr_to_rational(cr);
 
     // Defensive check for zero denominator
     if (r.denominator == 0) {
-        fprintf(stderr, "Error: division by zero in cr_to_double\n");
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Invalid denominator (zero) in rational conversion");
+        set_error(error, CR_ERROR_INVALID_DENOMINATOR, msg, 0, 0);
         return 0.0;
+    }
+
+    // Success
+    if (error != NULL) {
+        set_error(error, CR_SUCCESS, "Success", 0, 0);
     }
 
     return (double)r.numerator / (double)r.denominator;
@@ -227,11 +272,11 @@ void cr_print(const CompactRational* cr) {
             printf("%lld/%lld", (long long)rem, (long long)r.denominator);
         }
     }
-    printf(" (%.6f)", cr_to_double(cr));
+    printf(" (%.6f)", cr_to_double(cr, NULL));  // Ignore errors in print function
 }
 
 // Add two compact rationals
-CompactRational cr_add(const CompactRational* a, const CompactRational* b) {
+CompactRational cr_add(const CompactRational* a, const CompactRational* b, CRError* error) {
     // Convert both to standard rationals, add them, then encode back
     Rational ra = cr_to_rational(a);
     Rational rb = cr_to_rational(b);
@@ -246,13 +291,16 @@ CompactRational cr_add(const CompactRational* a, const CompactRational* b) {
     // Check for overflow before downcasting to int32_t
     if (sum.numerator > INT32_MAX || sum.numerator < INT32_MIN ||
         sum.denominator > INT32_MAX || sum.denominator < INT32_MIN) {
-        fprintf(stderr, "Error: overflow in addition - result (%lld/%lld) exceeds int32_t range\n",
-                (long long)sum.numerator, (long long)sum.denominator);
-        return cr_from_int(0);  // Return zero on overflow
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Overflow in addition - result (%lld/%lld) exceeds int32_t range",
+                 (long long)sum.numerator, (long long)sum.denominator);
+        set_error(error, CR_ERROR_OVERFLOW, msg, (int32_t)sum.numerator, (int32_t)sum.denominator);
+        return cr_from_int(0, NULL);  // Return zero on overflow
     }
 
+    // Success - pass through any errors from cr_from_fraction
     // Convert back to compact form
-    return cr_from_fraction((int32_t)sum.numerator, (int32_t)sum.denominator);
+    return cr_from_fraction((int32_t)sum.numerator, (int32_t)sum.denominator, error);
 }
 
 // Print raw encoding (for debugging)
