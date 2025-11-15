@@ -14,7 +14,7 @@ PROGS_WITH_LIB = compact_rational test_e_representation canonicalize
 PROGS_WITH_LIB_SRC = $(addsuffix .c, $(PROGS_WITH_LIB))
 
 # Standalone programs (don't use the library)
-STANDALONE_PROGS = verify_bug find_best_e optimal_encoding
+STANDALONE_PROGS = find_best_e optimal_encoding
 STANDALONE_SRC = $(addsuffix .c, $(STANDALONE_PROGS))
 
 # All programs
@@ -67,7 +67,6 @@ help:
 	@echo "    canonicalize           - Test canonicalization"
 	@echo ""
 	@echo "  Standalone:"
-	@echo "    verify_bug             - Demonstrate bit 15 bug"
 	@echo "    find_best_e            - Find optimal e representations"
 	@echo "    optimal_encoding       - Explore encoding strategies"
 

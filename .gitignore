@@ -4,7 +4,6 @@
 
 # Executables
 compact_rational
-verify_bug
 canonicalize
 optimal_encoding
 find_best_e
