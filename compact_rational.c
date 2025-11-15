@@ -10,7 +10,7 @@ void run_tests() {
 
     // Test 1: Pure integers
     printf("Test 1: Pure integers\n");
-    CompactRational cr1 = cr_from_int(42);
+    CompactRational cr1 = cr_from_int(42, NULL);
     printf("  42 -> ");
     cr_print(&cr1);
     printf(" [%zu bytes]\n", cr_size(&cr1));
@@ -19,7 +19,7 @@ void run_tests() {
 
     // Test 2: Simple fractions
     printf("Test 2: Simple fractions\n");
-    CompactRational cr2 = cr_from_fraction(22, 3);  // 7 1/3
+    CompactRational cr2 = cr_from_fraction(22, 3, NULL);  // 7 1/3
     printf("  22/3 -> ");
     cr_print(&cr2);
     printf(" [%zu bytes]\n", cr_size(&cr2));
@@ -42,7 +42,7 @@ void run_tests() {
     };
 
     for (int i = 0; i < 7; i++) {
-        CompactRational cr = cr_from_fraction(fractions[i].num, fractions[i].denom);
+        CompactRational cr = cr_from_fraction(fractions[i].num, fractions[i].denom, NULL);
         printf("  %s -> ", fractions[i].name);
         cr_print(&cr);
         printf(" [%zu bytes]\n", cr_size(&cr));
@@ -51,9 +51,9 @@ void run_tests() {
 
     // Test 4: Addition (score summing)
     printf("Test 4: Addition (summing scores)\n");
-    CompactRational score1 = cr_from_fraction(15, 2);  // 7.5
-    CompactRational score2 = cr_from_fraction(25, 3);  // 8.333...
-    CompactRational score3 = cr_from_fraction(41, 5);  // 8.2
+    CompactRational score1 = cr_from_fraction(15, 2, NULL);  // 7.5
+    CompactRational score2 = cr_from_fraction(25, 3, NULL);  // 8.333...
+    CompactRational score3 = cr_from_fraction(41, 5, NULL);  // 8.2
 
     printf("  Score 1: ");
     cr_print(&score1);
@@ -65,8 +65,8 @@ void run_tests() {
     cr_print(&score3);
     printf("\n");
 
-    CompactRational sum = cr_add(&score1, &score2);
-    sum = cr_add(&sum, &score3);
+    CompactRational sum = cr_add(&score1, &score2, NULL);
+    sum = cr_add(&sum, &score3, NULL);
 
     printf("  Total: ");
     cr_print(&sum);
@@ -77,19 +77,19 @@ void run_tests() {
     // Test 5: Realistic grading scenario
     printf("Test 5: Realistic grading scenario\n");
     CompactRational grades[] = {
-        cr_from_fraction(17, 2),   // 8.5
-        cr_from_fraction(28, 3),   // 9.333...
-        cr_from_fraction(19, 2),   // 9.5
-        cr_from_int(10),           // 10
-        cr_from_fraction(31, 3),   // 10.333...
+        cr_from_fraction(17, 2, NULL),   // 8.5
+        cr_from_fraction(28, 3, NULL),   // 9.333...
+        cr_from_fraction(19, 2, NULL),   // 9.5
+        cr_from_int(10, NULL),           // 10
+        cr_from_fraction(31, 3, NULL),   // 10.333...
     };
 
-    CompactRational total = cr_from_int(0);
+    CompactRational total = cr_from_int(0, NULL);
     for (int i = 0; i < 5; i++) {
         printf("  Assignment %d: ", i + 1);
         cr_print(&grades[i]);
         printf(" [%zu bytes]\n", cr_size(&grades[i]));
-        total = cr_add(&total, &grades[i]);
+        total = cr_add(&total, &grades[i], NULL);
     }
 
     printf("  Final Grade: ");
@@ -100,7 +100,7 @@ void run_tests() {
 
     // Test 6: Negative numbers
     printf("Test 6: Negative numbers\n");
-    CompactRational neg1 = cr_from_fraction(-7, 2);
+    CompactRational neg1 = cr_from_fraction(-7, 2, NULL);
     printf("  -7/2 -> ");
     cr_print(&neg1);
     printf(" [%zu bytes]\n", cr_size(&neg1));
@@ -109,31 +109,31 @@ void run_tests() {
 
     // Test 7: Edge cases
     printf("Test 7: Edge cases\n");
-    CompactRational max_val = cr_from_int(16383);
+    CompactRational max_val = cr_from_int(16383, NULL);
     printf("  Max whole (16383): ");
     cr_print(&max_val);
     printf("\n");
 
-    CompactRational min_val = cr_from_int(-16383);
+    CompactRational min_val = cr_from_int(-16383, NULL);
     printf("  Min whole (-16383): ");
     cr_print(&min_val);
     printf("\n");
 
     // Test 8: Negative integers (NEW - addresses code review)
     printf("\nTest 8: Negative integers without fractions\n");
-    CompactRational neg_int1 = cr_from_int(-1);
+    CompactRational neg_int1 = cr_from_int(-1, NULL);
     printf("  -1 -> ");
     cr_print(&neg_int1);
     printf(" [%zu bytes]\n", cr_size(&neg_int1));
     cr_print_encoding(&neg_int1);
 
-    CompactRational neg_int2 = cr_from_int(-100);
+    CompactRational neg_int2 = cr_from_int(-100, NULL);
     printf("  -100 -> ");
     cr_print(&neg_int2);
     printf(" [%zu bytes]\n", cr_size(&neg_int2));
     cr_print_encoding(&neg_int2);
 
-    CompactRational neg_int3 = cr_from_int(-16383);
+    CompactRational neg_int3 = cr_from_int(-16383, NULL);
     printf("  -16383 -> ");
     cr_print(&neg_int3);
     printf(" [%zu bytes]\n", cr_size(&neg_int3));
@@ -142,42 +142,42 @@ void run_tests() {
     // Test 9: Boundary value tests (NEW - addresses code review)
     printf("\nTest 9: Boundary values (clamping tests)\n");
     printf("  Testing value above max (16384):\n  ");
-    CompactRational above_max = cr_from_int(16384);
+    CompactRational above_max = cr_from_int(16384, NULL);
     cr_print(&above_max);
     printf("\n");
 
     printf("  Testing value below min (-16384):\n  ");
-    CompactRational below_min = cr_from_int(-16384);
+    CompactRational below_min = cr_from_int(-16384, NULL);
     cr_print(&below_min);
     printf("\n");
 
     printf("  Testing very large value (1000000):\n  ");
-    CompactRational very_large = cr_from_int(1000000);
+    CompactRational very_large = cr_from_int(1000000, NULL);
     cr_print(&very_large);
     printf("\n");
 
     // Test 10: Error case - division by zero (NEW - addresses code review)
     printf("\nTest 10: Error cases\n");
     printf("  Testing division by zero:\n  ");
-    CompactRational zero_denom = cr_from_fraction(1, 0);
+    CompactRational zero_denom = cr_from_fraction(1, 0, NULL);
     cr_print(&zero_denom);
     printf("\n");
 
     // Test 11: Negative fractions (NEW - addresses code review)
     printf("\nTest 11: Negative fractions\n");
-    CompactRational neg_frac1 = cr_from_fraction(-5, 2);
+    CompactRational neg_frac1 = cr_from_fraction(-5, 2, NULL);
     printf("  -5/2 -> ");
     cr_print(&neg_frac1);
     printf(" [%zu bytes]\n", cr_size(&neg_frac1));
     cr_print_encoding(&neg_frac1);
 
-    CompactRational neg_frac2 = cr_from_fraction(5, -3);
+    CompactRational neg_frac2 = cr_from_fraction(5, -3, NULL);
     printf("  5/-3 -> ");
     cr_print(&neg_frac2);
     printf(" [%zu bytes]\n", cr_size(&neg_frac2));
     cr_print_encoding(&neg_frac2);
 
-    CompactRational neg_frac3 = cr_from_fraction(-22, -3);
+    CompactRational neg_frac3 = cr_from_fraction(-22, -3, NULL);
     printf("  -22/-3 -> ");
     cr_print(&neg_frac3);
     printf(" [%zu bytes]\n", cr_size(&neg_frac3));
@@ -185,16 +185,16 @@ void run_tests() {
 
     // Test 12: Addition with negative numbers (NEW - addresses code review)
     printf("\nTest 12: Addition with negative numbers\n");
-    CompactRational pos_num = cr_from_int(10);
-    CompactRational neg_num = cr_from_int(-7);
-    CompactRational sum_mixed = cr_add(&pos_num, &neg_num);
+    CompactRational pos_num = cr_from_int(10, NULL);
+    CompactRational neg_num = cr_from_int(-7, NULL);
+    CompactRational sum_mixed = cr_add(&pos_num, &neg_num, NULL);
     printf("  10 + (-7) = ");
     cr_print(&sum_mixed);
     printf("\n");
 
-    CompactRational neg_a = cr_from_int(-5);
-    CompactRational neg_b = cr_from_int(-3);
-    CompactRational sum_neg = cr_add(&neg_a, &neg_b);
+    CompactRational neg_a = cr_from_int(-5, NULL);
+    CompactRational neg_b = cr_from_int(-3, NULL);
+    CompactRational sum_neg = cr_add(&neg_a, &neg_b, NULL);
     printf("  (-5) + (-3) = ");
     cr_print(&sum_neg);
     printf("\n");
