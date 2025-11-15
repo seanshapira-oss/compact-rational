@@ -13,12 +13,11 @@
 #define MIN_WHOLE_VALUE -16383
 
 // Compact Rational structure
-// NOTE: The 'whole' field uses standard int16_t two's complement representation.
-// For positive integers, bit 15 = 0 naturally. For negative integers, bit 15 = 1 (sign bit).
-// The tuple presence flag functionality is implemented via num_tuples, not bit 15.
+// NOTE: Bit 15 of 'whole' is the tuple presence flag (0 = integer only, 1 = tuples follow).
+// Bits 14-0 of 'whole' represent a signed 15-bit integer (-16383 to +16383).
+// The last tuple has bit 7 set in its denominator byte to indicate end of tuple sequence.
 typedef struct {
-    int16_t whole;           // Signed 16-bit integer (includes sign bit at position 15)
-    uint8_t num_tuples;      // Number of tuples present (0 to MAX_TUPLES) - authoritative tuple flag
+    int16_t whole;           // Bit 15: tuple flag, Bits 14-0: signed 15-bit integer
     uint16_t tuples[MAX_TUPLES];  // Each: high byte = numerator, low byte = denom info
 } CompactRational;
 
@@ -82,8 +81,7 @@ uint8_t find_antichain_denominator(int64_t denom) {
 
 // Initialize a compact rational to zero
 void cr_init(CompactRational* cr) {
-    cr->whole = 0;
-    cr->num_tuples = 0;
+    cr->whole = 0;  // Bit 15 = 0 (no tuples), value = 0
     memset(cr->tuples, 0, sizeof(cr->tuples));
 }
 
@@ -104,7 +102,8 @@ CompactRational cr_from_int(int32_t value) {
         value = MIN_WHOLE_VALUE;
     }
 
-    cr.whole = (int16_t)value;  // No tuples, num_tuples = 0
+    // Store as 15-bit signed value in bits 14-0, bit 15 = 0 (no tuples)
+    cr.whole = (int16_t)(value & 0x7FFF);
     return cr;
 }
 
@@ -144,8 +143,6 @@ CompactRational cr_from_fraction(int32_t num, int32_t denom) {
         whole = MIN_WHOLE_VALUE;
     }
 
-    cr.whole = (int16_t)whole;
-
     // If there's a fractional part, encode it
     if (remainder_num != 0) {
         // Find appropriate antichain denominator
@@ -155,19 +152,20 @@ CompactRational cr_from_fraction(int32_t num, int32_t denom) {
         uint64_t scaled_num = (remainder_num * antichain_denom) / r.denominator;
 
         if (scaled_num > 0 && scaled_num <= MAX_NUMERATOR) {
-            // Validate num_tuples bounds
-            if (1 > MAX_TUPLES) {
-                fprintf(stderr, "Error: num_tuples (1) exceeds MAX_TUPLES (%d)\n", MAX_TUPLES);
-                return cr;  // Return integer part only
-            }
-
-            cr.num_tuples = 1;
+            // Encode whole part in bits 14-0, set bit 15 = 1 (tuples present)
+            cr.whole = (int16_t)((whole & 0x7FFF) | 0x8000);
 
             uint8_t offset = antichain_denom - MIN_DENOMINATOR;
-            uint8_t denom_byte = 0x80 | offset;  // Set end flag
+            uint8_t denom_byte = 0x80 | offset;  // Set end flag (bit 7 = 1)
 
             cr.tuples[0] = ((uint16_t)scaled_num << 8) | denom_byte;
+        } else {
+            // No valid fractional part, store as integer only
+            cr.whole = (int16_t)(whole & 0x7FFF);  // Bit 15 = 0 (no tuples)
         }
+    } else {
+        // No fractional part, store as integer only
+        cr.whole = (int16_t)(whole & 0x7FFF);  // Bit 15 = 0 (no tuples)
     }
     
     return cr;
@@ -177,29 +175,31 @@ CompactRational cr_from_fraction(int32_t num, int32_t denom) {
 Rational cr_to_rational(const CompactRational* cr) {
     Rational result;
 
-    // Use the whole field directly as a signed 16-bit integer
-    // This properly handles both positive and negative integers
-    result.numerator = cr->whole;
+    // Extract the 15-bit signed integer from bits 14-0
+    int16_t whole_value = cr->whole & 0x7FFF;  // Mask to 15 bits
+
+    // Sign-extend if bit 14 (sign bit of 15-bit value) is set
+    if (whole_value & 0x4000) {  // If bit 14 is set (negative in 15-bit)
+        whole_value |= 0x8000;   // Set bit 15 to sign-extend to 16-bit
+    }
+
+    result.numerator = whole_value;
     result.denominator = 1;
 
-    // Use num_tuples as the authoritative tuple presence indicator
-    if (cr->num_tuples == 0) {
+    // Check bit 15 for tuple presence flag
+    if (!(cr->whole & 0x8000)) {
+        // Bit 15 = 0, no tuples
         return result;
     }
 
-    // Validate num_tuples
-    if (cr->num_tuples > MAX_TUPLES) {
-        fprintf(stderr, "Error: num_tuples (%d) exceeds MAX_TUPLES (%d), processing only first %d\n",
-                cr->num_tuples, MAX_TUPLES, MAX_TUPLES);
-    }
-
-    // Process tuples and accumulate fractions
-    int tuples_to_process = (cr->num_tuples < MAX_TUPLES) ? cr->num_tuples : MAX_TUPLES;
-    for (int i = 0; i < tuples_to_process; i++) {
+    // Bit 15 = 1, tuples are present
+    // Process tuples until we find one with end flag (bit 7 set in denominator byte)
+    for (int i = 0; i < MAX_TUPLES; i++) {
         uint8_t numerator = (cr->tuples[i] >> 8) & 0xFF;
         uint8_t denom_byte = cr->tuples[i] & 0xFF;
         uint8_t offset = denom_byte & 0x7F;
         uint8_t denominator = MIN_DENOMINATOR + offset;
+        bool is_last = (denom_byte & 0x80) != 0;
 
         // Add this fraction: result += numerator/denominator
         // result = (result.num * denom + numerator * result.denom) / (result.denom * denom)
@@ -207,6 +207,11 @@ Rational cr_to_rational(const CompactRational* cr) {
         result.denominator *= denominator;
 
         reduce_rational(&result);
+
+        // Stop if this is the last tuple
+        if (is_last) {
+            break;
+        }
     }
 
     return result;
@@ -276,19 +281,23 @@ CompactRational cr_add(const CompactRational* a, const CompactRational* b) {
 // Print raw encoding (for debugging)
 void cr_print_encoding(const CompactRational* cr) {
     // Cast to uint16_t to avoid sign extension artifacts in hex display
-    printf("Encoding: whole=0x%04X (%d tuples)", (uint16_t)cr->whole, cr->num_tuples);
+    bool has_tuples = (cr->whole & 0x8000) != 0;
+    printf("Encoding: whole=0x%04X (bit15=%d)", (uint16_t)cr->whole, has_tuples ? 1 : 0);
 
-    if (cr->num_tuples > 0) {
+    if (has_tuples) {
         printf(" [");
-        int tuples_to_print = (cr->num_tuples < MAX_TUPLES) ? cr->num_tuples : MAX_TUPLES;
-        for (int i = 0; i < tuples_to_print; i++) {
+        for (int i = 0; i < MAX_TUPLES; i++) {
             uint8_t num = (cr->tuples[i] >> 8) & 0xFF;
             uint8_t denom_byte = cr->tuples[i] & 0xFF;
             uint8_t offset = denom_byte & 0x7F;
             bool end_flag = (denom_byte & 0x80) != 0;
 
             printf("%d/%d%s", num, MIN_DENOMINATOR + offset, end_flag ? "(end)" : "");
-            if (i < tuples_to_print - 1) printf(", ");
+
+            if (end_flag) {
+                break;  // Stop after the last tuple
+            }
+            printf(", ");
         }
         printf("]");
     }
@@ -297,7 +306,26 @@ void cr_print_encoding(const CompactRational* cr) {
 
 // Get size in bytes
 size_t cr_size(const CompactRational* cr) {
-    return 2 + (cr->num_tuples * 2);  // 2 bytes for whole, 2 bytes per tuple
+    // Start with 2 bytes for the whole field
+    size_t size = 2;
+
+    // Check if tuples are present (bit 15 of whole)
+    if (!(cr->whole & 0x8000)) {
+        // No tuples
+        return size;
+    }
+
+    // Count tuples until we find the end flag
+    for (int i = 0; i < MAX_TUPLES; i++) {
+        size += 2;  // Each tuple is 2 bytes
+        uint8_t denom_byte = cr->tuples[i] & 0xFF;
+        bool is_last = (denom_byte & 0x80) != 0;
+        if (is_last) {
+            break;
+        }
+    }
+
+    return size;
 }
 
 // ============================================================================
