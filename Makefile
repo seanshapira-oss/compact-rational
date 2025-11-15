@@ -3,24 +3,42 @@ CFLAGS = -Wall -Wextra -O2
 LDFLAGS = -lm
 
 TARGET = compact_rational
-SRC = compact_rational.c
-OBJ = $(SRC:.c=.o)
+CANON_TARGET = canonicalize
+OPTIMAL_TARGET = optimal_encoding
+VERIFY_TARGET = verify_bug
 
-.PHONY: all clean test
+TARGETS = $(TARGET) $(CANON_TARGET) $(OPTIMAL_TARGET) $(VERIFY_TARGET)
 
-all: $(TARGET)
+.PHONY: all clean test canon optimal verify
 
-$(TARGET): $(OBJ)
-	$(CC) $(OBJ) -o $(TARGET) $(LDFLAGS)
+all: $(TARGETS)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+$(TARGET): compact_rational.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+$(CANON_TARGET): canonicalize.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+$(OPTIMAL_TARGET): optimal_encoding.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+$(VERIFY_TARGET): verify_bug.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 test: $(TARGET)
 	./$(TARGET)
 
+canon: $(CANON_TARGET)
+	./$(CANON_TARGET)
+
+optimal: $(OPTIMAL_TARGET)
+	./$(OPTIMAL_TARGET)
+
+verify: $(VERIFY_TARGET)
+	./$(VERIFY_TARGET)
+
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -f $(TARGETS)
 
 run: $(TARGET)
 	./$(TARGET)
