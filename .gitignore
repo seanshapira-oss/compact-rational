@@ -32,3 +32,6 @@ build/
 dist/
 test_overflow
 test_tuple_limit
+test_add_correctness
+compact_rational_lib.c
+compact_rational_lib.o
