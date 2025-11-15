@@ -1,44 +1,74 @@
+# Makefile for CompactRational Library and Programs
+
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wall -Wextra -std=c99 -O2
 LDFLAGS = -lm
 
-TARGET = compact_rational
-CANON_TARGET = canonicalize
-OPTIMAL_TARGET = optimal_encoding
-VERIFY_TARGET = verify_bug
+# Library
+LIB_SRC = compact_rational_lib.c
+LIB_OBJ = compact_rational_lib.o
+LIB_HEADER = compact_rational.h
 
-TARGETS = $(TARGET) $(CANON_TARGET) $(OPTIMAL_TARGET) $(VERIFY_TARGET)
+# Programs that use the library
+PROGS_WITH_LIB = compact_rational test_e_representation canonicalize
+PROGS_WITH_LIB_SRC = $(addsuffix .c, $(PROGS_WITH_LIB))
 
-.PHONY: all clean test canon optimal verify
+# Standalone programs (don't use the library)
+STANDALONE_PROGS = verify_bug find_best_e optimal_encoding
+STANDALONE_SRC = $(addsuffix .c, $(STANDALONE_PROGS))
 
-all: $(TARGETS)
+# All programs
+ALL_PROGS = $(PROGS_WITH_LIB) $(STANDALONE_PROGS)
 
-$(TARGET): compact_rational.c
-	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+# Default target: build everything
+all: $(LIB_OBJ) $(ALL_PROGS)
 
-$(CANON_TARGET): canonicalize.c
-	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+# Build the library object file
+$(LIB_OBJ): $(LIB_SRC) $(LIB_HEADER)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OPTIMAL_TARGET): optimal_encoding.c
-	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+# Build programs that use the library
+$(PROGS_WITH_LIB): %: %.c $(LIB_OBJ) $(LIB_HEADER)
+	$(CC) $(CFLAGS) $< $(LIB_OBJ) $(LDFLAGS) -o $@
 
-$(VERIFY_TARGET): verify_bug.c
-	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+# Build standalone programs
+$(STANDALONE_PROGS): %: %.c
+	$(CC) $(CFLAGS) $< $(LDFLAGS) -o $@
 
-test: $(TARGET)
-	./$(TARGET)
-
-canon: $(CANON_TARGET)
-	./$(CANON_TARGET)
-
-optimal: $(OPTIMAL_TARGET)
-	./$(OPTIMAL_TARGET)
-
-verify: $(VERIFY_TARGET)
-	./$(VERIFY_TARGET)
-
+# Clean build artifacts
 clean:
-	rm -f $(TARGETS)
+	rm -f $(LIB_OBJ) $(ALL_PROGS)
 
-run: $(TARGET)
-	./$(TARGET)
+# Test all programs
+test: all
+	@echo "=== Testing compact_rational ==="
+	./compact_rational
+	@echo ""
+	@echo "=== Testing canonicalize ==="
+	./canonicalize
+	@echo ""
+	@echo "=== Testing test_e_representation ==="
+	./test_e_representation
+
+# Help
+help:
+	@echo "CompactRational Library Build System"
+	@echo ""
+	@echo "Targets:"
+	@echo "  all      - Build library and all programs (default)"
+	@echo "  clean    - Remove all build artifacts"
+	@echo "  test     - Build and run test programs"
+	@echo "  help     - Show this help message"
+	@echo ""
+	@echo "Programs:"
+	@echo "  Library-based:"
+	@echo "    compact_rational       - Main test suite"
+	@echo "    test_e_representation  - Test e constant representations"
+	@echo "    canonicalize           - Test canonicalization"
+	@echo ""
+	@echo "  Standalone:"
+	@echo "    verify_bug             - Demonstrate bit 15 bug"
+	@echo "    find_best_e            - Find optimal e representations"
+	@echo "    optimal_encoding       - Explore encoding strategies"
+
+.PHONY: all clean test help
