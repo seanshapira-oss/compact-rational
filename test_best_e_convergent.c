@@ -27,7 +27,7 @@ int main() {
     // Convert to CompactRational
     printf("Converting to CompactRational...\n");
     CompactRational cr19 = cr_from_fraction((int32_t)conv19.numerator,
-                                            (int32_t)conv19.denominator);
+                                            (int32_t)conv19.denominator, NULL);
 
     printf("  Mathematical form: ");
     cr_print(&cr19);
@@ -36,7 +36,7 @@ int main() {
     printf("  Encoding: ");
     cr_print_encoding(&cr19);
 
-    double cr_val = cr_to_double(&cr19);
+    double cr_val = cr_to_double(&cr19, NULL);
     double cr_err = fabs(cr_val - E);
     printf("\n  CR Value: %.20f\n", cr_val);
     printf("  CR Error: %.20e\n", cr_err);
@@ -52,8 +52,8 @@ int main() {
     two_tuple.tuples[1] = ((uint16_t)89 << 8) | 0xE6;
 
     printf("Previous best (2 + 55/166 + 89/230):\n");
-    printf("  Value: %.20f\n", cr_to_double(&two_tuple));
-    printf("  Error: %.20e\n", fabs(cr_to_double(&two_tuple) - E));
+    printf("  Value: %.20f\n", cr_to_double(&two_tuple, NULL));
+    printf("  Error: %.20e\n", fabs(cr_to_double(&two_tuple, NULL) - E));
     printf("  Size:  6 bytes\n");
     printf("  This equals convergent 12: 25946/9545\n\n");
 
@@ -62,9 +62,9 @@ int main() {
     printf("  Error: %.20e\n", cr_err);
     printf("  Size:  %zu bytes\n\n", cr_size(&cr19));
 
-    if (cr_err < fabs(cr_to_double(&two_tuple) - E)) {
+    if (cr_err < fabs(cr_to_double(&two_tuple, NULL) - E)) {
         printf("✓ Convergent 19 is %.1fx MORE accurate!\n",
-               fabs(cr_to_double(&two_tuple) - E) / cr_err);
+               fabs(cr_to_double(&two_tuple, NULL) - E) / cr_err);
     } else {
         printf("✗ Convergent 19 loses precision in CompactRational encoding.\n");
         printf("  (This happens when the denominator doesn't fit the antichain format well)\n");
@@ -83,9 +83,9 @@ int main() {
 
     if (conv20.numerator <= INT32_MAX && conv20.denominator <= INT32_MAX) {
         CompactRational cr20 = cr_from_fraction((int32_t)conv20.numerator,
-                                                (int32_t)conv20.denominator);
-        printf("  CR Value: %.20f\n", cr_to_double(&cr20));
-        printf("  CR Error: %.20e\n", fabs(cr_to_double(&cr20) - E));
+                                                (int32_t)conv20.denominator, NULL);
+        printf("  CR Value: %.20f\n", cr_to_double(&cr20, NULL));
+        printf("  CR Error: %.20e\n", fabs(cr_to_double(&cr20, NULL) - E));
         printf("  CR Size:  %zu bytes\n", cr_size(&cr20));
     }
 

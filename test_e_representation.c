@@ -49,10 +49,10 @@ int main() {
     printf("Mathematical form: ");
     cr_print(&e_single);
     printf("\n");
-    printf("Decimal value: %.15f\n", cr_to_double(&e_single));
+    printf("Decimal value: %.15f\n", cr_to_double(&e_single, NULL));
     printf("Error: %.15e (%.6f%%)\n",
-           fabs(cr_to_double(&e_single) - E),
-           fabs(cr_to_double(&e_single) - E) / E * 100);
+           fabs(cr_to_double(&e_single, NULL) - E),
+           fabs(cr_to_double(&e_single, NULL) - E) / E * 100);
     printf("Size: %zu bytes\n", cr_size(&e_single));
     cr_print_encoding(&e_single);
     printf("\n");
@@ -63,10 +63,10 @@ int main() {
     printf("Mathematical form: ");
     cr_print(&e_two);
     printf("\n");
-    printf("Decimal value: %.15f\n", cr_to_double(&e_two));
+    printf("Decimal value: %.15f\n", cr_to_double(&e_two, NULL));
     printf("Error: %.15e (%.9f%%)\n",
-           fabs(cr_to_double(&e_two) - E),
-           fabs(cr_to_double(&e_two) - E) / E * 100);
+           fabs(cr_to_double(&e_two, NULL) - E),
+           fabs(cr_to_double(&e_two, NULL) - E) / E * 100);
     printf("Size: %zu bytes\n", cr_size(&e_two));
     cr_print_encoding(&e_two);
     printf("\n");
@@ -75,7 +75,7 @@ int main() {
     printf("--- Comparison ---\n");
     printf("Single-tuple is more compact (%zu bytes) but less accurate\n", cr_size(&e_single));
     printf("Two-tuple is more accurate (%.1fx better) but larger (%zu bytes)\n",
-           fabs(cr_to_double(&e_single) - E) / fabs(cr_to_double(&e_two) - E),
+           fabs(cr_to_double(&e_single, NULL) - E) / fabs(cr_to_double(&e_two, NULL) - E),
            cr_size(&e_two));
     printf("\n");
 
