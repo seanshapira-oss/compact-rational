@@ -4,6 +4,7 @@
 
 # Executables
 compact_rational
+verify_bug
 *.exe
 *.out
 *.app
