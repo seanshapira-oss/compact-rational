@@ -8,6 +8,9 @@ canonicalize
 optimal_encoding
 find_best_e
 test_e_representation
+analyze_e_fraction
+find_e_convergents
+test_best_e_convergent
 *.exe
 *.out
 *.app

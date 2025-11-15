@@ -13,6 +13,10 @@ LIB_HEADER = compact_rational.h
 PROGS_WITH_LIB = compact_rational test_e_representation canonicalize
 PROGS_WITH_LIB_SRC = $(addsuffix .c, $(PROGS_WITH_LIB))
 
+# Analysis programs (library-based, optional - use 'make analysis')
+ANALYSIS_PROGS = analyze_e_fraction find_e_convergents test_best_e_convergent
+ANALYSIS_SRC = $(addsuffix .c, $(ANALYSIS_PROGS))
+
 # Standalone programs (don't use the library)
 STANDALONE_PROGS = find_best_e optimal_encoding
 STANDALONE_SRC = $(addsuffix .c, $(STANDALONE_PROGS))
@@ -35,9 +39,16 @@ $(PROGS_WITH_LIB): %: %.c $(LIB_OBJ) $(LIB_HEADER)
 $(STANDALONE_PROGS): %: %.c
 	$(CC) $(CFLAGS) $< $(LDFLAGS) -o $@
 
+# Build analysis programs
+$(ANALYSIS_PROGS): %: %.c $(LIB_OBJ) $(LIB_HEADER)
+	$(CC) $(CFLAGS) $< $(LIB_OBJ) $(LDFLAGS) -o $@
+
+# Build all analysis programs
+analysis: $(LIB_OBJ) $(ANALYSIS_PROGS)
+
 # Clean build artifacts
 clean:
-	rm -f $(LIB_OBJ) $(ALL_PROGS)
+	rm -f $(LIB_OBJ) $(ALL_PROGS) $(ANALYSIS_PROGS)
 
 # Test all programs
 test: all
@@ -56,6 +67,7 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@echo "  all      - Build library and all programs (default)"
+	@echo "  analysis - Build analysis/research programs"
 	@echo "  clean    - Remove all build artifacts"
 	@echo "  test     - Build and run test programs"
 	@echo "  help     - Show this help message"
@@ -66,8 +78,13 @@ help:
 	@echo "    test_e_representation  - Test e constant representations"
 	@echo "    canonicalize           - Test canonicalization"
 	@echo ""
+	@echo "  Analysis (build with 'make analysis'):"
+	@echo "    analyze_e_fraction     - Analyze arbitrary e fraction approximations"
+	@echo "    find_e_convergents     - Find continued fraction convergents of e"
+	@echo "    test_best_e_convergent - Test superior e convergents in CompactRational"
+	@echo ""
 	@echo "  Standalone:"
 	@echo "    find_best_e            - Find optimal e representations"
 	@echo "    optimal_encoding       - Explore encoding strategies"
 
-.PHONY: all clean test help
+.PHONY: all clean test help analysis
