@@ -30,3 +30,5 @@ Thumbs.db
 # Build directory
 build/
 dist/
+test_overflow
+test_tuple_limit
