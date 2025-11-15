@@ -56,7 +56,7 @@ int main() {
             printf("\n✓ Reduced form fits in int32_t!\n\n");
 
             CompactRational cr = cr_from_fraction((int32_t)reduced.numerator,
-                                                  (int32_t)reduced.denominator);
+                                                  (int32_t)reduced.denominator, NULL);
 
             printf("CompactRational representation:\n");
             printf("  Value: ");
@@ -66,7 +66,7 @@ int main() {
             printf("  Encoding: ");
             cr_print_encoding(&cr);
 
-            double cr_value = cr_to_double(&cr);
+            double cr_value = cr_to_double(&cr, NULL);
             double cr_error = fabs(cr_value - E);
 
             printf("\n  CR value:     %.20f\n", cr_value);
@@ -80,7 +80,7 @@ int main() {
     } else {
         // Direct conversion possible
         CompactRational cr = cr_from_fraction((int32_t)e_approx.numerator,
-                                              (int32_t)e_approx.denominator);
+                                              (int32_t)e_approx.denominator, NULL);
 
         printf("Direct CompactRational conversion:\n");
         printf("  Value: ");
@@ -100,8 +100,8 @@ int main() {
     simple.tuples[0] = ((uint16_t)181 << 8) | 0xFC;  // 181/252, end
 
     printf("Best single-tuple (2 + 181/252):\n");
-    printf("  Value: %.20f\n", cr_to_double(&simple));
-    printf("  Error: %.20e\n", fabs(cr_to_double(&simple) - E));
+    printf("  Value: %.20f\n", cr_to_double(&simple, NULL));
+    printf("  Error: %.20e\n", fabs(cr_to_double(&simple, NULL) - E));
     printf("  Size:  4 bytes\n\n");
 
     // Compare with two-tuple
@@ -112,8 +112,8 @@ int main() {
     two_tuple.tuples[1] = ((uint16_t)89 << 8) | 0xE6;  // 89/230, end
 
     printf("Best two-tuple (2 + 55/166 + 89/230):\n");
-    printf("  Value: %.20f\n", cr_to_double(&two_tuple));
-    printf("  Error: %.20e\n", fabs(cr_to_double(&two_tuple) - E));
+    printf("  Value: %.20f\n", cr_to_double(&two_tuple, NULL));
+    printf("  Error: %.20e\n", fabs(cr_to_double(&two_tuple, NULL) - E));
     printf("  Size:  6 bytes\n");
 
     return 0;
